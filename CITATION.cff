@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Watch Skill, please cite it using these metadata."
+title: "Watch Skill: Multimodal Video Input, Understanding, and Loop for AI Agents"
+type: software
+authors:
+  - family-names: "Formuli"
+    given-names: "Abdullah"
+    email: "authrainmedia@gmail.com"
+    website: "https://github.com/authrain-cloud-abdullahformuli"
+url: "https://github.com/authrain-cloud-abdullahformuli/watch-skill"
+repository-code: "https://github.com/authrain-cloud-abdullahformuli/watch-skill"
+license: MIT
+keywords:
+  - video-understanding
+  - mcp
+  - multimodal
+  - vision
+  - ai-agents
+  - transcription
+  - ocr
+  - the-loop

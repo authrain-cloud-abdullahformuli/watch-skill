@@ -1,0 +1,695 @@
+# Architecture & dependency decisions
+
+A running log of non-obvious choices, especially Windows-driven dependency
+swaps. Newest entries at the bottom of each section.
+
+## Layout
+
+- **Monorepo with `core/` never importing `surfaces/`.** Enforced by review
+  and a unit test (import-graph check planned). Surfaces are thin wrappers.
+- **Hatchling multi-package wheel**: `src/watch_skill` and `surfaces` both
+  ship in the `watch-skill` distribution. One install gives the SDK, the CLI,
+  the MCP server, and the REST app.
+
+## Environment
+
+- **Python 3.11 pinned for the dev venv** (`.python-version`). The machine's
+  default Python is 3.14, but the heavy native deps (onnxruntime for
+  RapidOCR, CTranslate2 for faster-whisper, torch for sentence-transformers)
+  publish wheels for 3.11/3.12 first. `requires-python = ">=3.11"` stays
+  permissive; the venv stays conservative.
+- **uv** for env + lockfile (available on this machine; pip+venv documented
+  as fallback in README).
+
+## Self-managed binaries
+
+- **Managed bin dir defaults to `~/.watch-skill/bin`, not the repo `bin/`.**
+  The package must bootstrap itself when installed from PyPI too, where there
+  is no repo checkout. A repo-local `bin/` (gitignored) is still honored when
+  present — set `WATCHSKILL_BIN_DIR` or drop binaries there manually.
+  Lookup order: managed bin dir first, then PATH — so a self-healing update
+  controls the binary actually used even when a stale system copy exists.
+- **yt-dlp**: bootstrapped as the standalone `yt-dlp.exe` from GitHub
+  releases (not pip) so `yt-dlp -U` self-update works without touching the
+  Python environment.
+- **ffmpeg**: winget (`Gyan.FFmpeg`) → choco → portable
+  `ffmpeg-release-essentials` zip from gyan.dev extracted into the managed
+  bin dir. All three paths are implemented; the zip path guarantees a clean
+  machine with only Python still works.
+
+## Windows-friendly dependency swaps
+
+- **OCR: RapidOCR (onnxruntime) instead of Tesseract/pytesseract.** Tesseract
+  needs a system installer on Windows; RapidOCR is a pure `pip install` with
+  bundled ONNX models.
+- **OpenCV: `opencv-python-headless`** — PySceneDetect needs cv2; headless
+  avoids GUI DLL baggage on servers/CI.
+- **Whisper: faster-whisper (CTranslate2)** — prebuilt Windows wheels, no
+  Rust/C++ toolchain needed, CPU-friendly with int8.
+- **Embeddings: fastembed (ONNX) instead of sentence-transformers.** The
+  plan called for sentence-transformers, but it drags in torch (~2 GB
+  installed), which does not fit the disk budget the reference class
+  assumes. fastembed serves the same MiniLM-class models
+  (`sentence-transformers/all-MiniLM-L6-v2`) through onnxruntime, which the
+  OCR stack already installs. Same vectors, ~50 MB instead of ~2 GB.
+
+## Reference-inherited defaults (from a code read of claude-video 0.2.0)
+
+- Frame width 512 px, hard cap 100 frames, 2 fps max, duration-tiered
+  budgets, focused-mode denser tiers.
+- Captions → local whisper → cloud (opt-in) transcription ladder.
+- Privacy invariants as hard rules with tests: the video file never leaves
+  the machine; no cookies/logins; only extracted mono-16kHz audio may go to a
+  cloud STT API, and only when the user explicitly enabled cloud STT.
+
+## Milestone 4
+
+- **REST error mapping is prefix-based.** `acquire.*`/`vision.*`/`transcribe.*`
+  → 502 (upstream), `perceive.*`/`loop.*` → 422, `index.*`/`*.not_found` → 404,
+  `config.*` → 400. The structured `{error, message, fix, details}` body is
+  preserved verbatim in `detail` so REST agents get the same actionable
+  errors as MCP agents.
+- **The REST API refuses non-loopback binds without a bearer token**
+  (`config.public_bind_no_token`). Safe-by-default beats convenient-by-default
+  for a server that can read local files.
+- **`diarize` extra is NOT part of `all`.** pyannote pulls torch (~2 GB) and
+  needs a gated Hugging Face model; forcing that on every `[all]` install
+  would wreck the "clean machine, only Python" bootstrap story. Diarization
+  degrades loudly-but-gracefully: transcript comes back unlabeled with a
+  structured hint on stderr. The speaker-assignment logic is a pure function
+  over a `SpeakerTurn` contract, so it is fully tested without torch.
+- **Claude Skill adapter is instructions-only.** Unlike the reference (which
+  bundles scripts), our SKILL.md shells into the installed `watch-skill` CLI —
+  one engine, no drift between skill and core. The trade-off (the package must
+  be installed) is handled by the skill's Step 0 (`pip install watch-skill`).
+- **Demo GIF is committed** (`docs/assets/loop_before_after.gif`, ~140 KB) —
+  it is our own generated artifact from the M3 acceptance demo, and the README
+  needs it to communicate THE LOOP in three seconds.
+
+## Phase 1 — live golden-path findings (v1.0 hardening)
+
+- **OpenRouter added as a first-class provider.** OpenAI-compatible wire
+  format with attribution headers; `:free` model variants get a 0.0 price in
+  the cost guard. Chosen because one key routes to every major vision model.
+- **Original-language captions beat auto-translations.** Live bug: an Arabic
+  video yielded ENGLISH auto-translated captions because the default
+  `sub-langs en.*` matched the translation track. Fix: read `language` from
+  the info.json, fetch the original track when missing, and prefer it in
+  subtitle picking. The "transcript" a user gets is now what is actually
+  said, not a machine translation of it.
+- **Arabic FTS was byte-exact.** unicode61 gives no Arabic folding: hamza
+  variants, alef maqsura, ta marbuta, and diacritics all broke matching.
+  Fix: `text_norm` shadow column (migration v2) + the same folding applied
+  to queries. Display text is never modified.
+- **Arabic OCR needs a script-specific model.** The bundled RapidOCR ch/en
+  models produce garbage on Arabic. Fix: managed per-script rec models
+  (downloaded once into `<data_dir>/models/ocr/`), auto-selected from the
+  video's detected language. Verified live on real Arabic frames
+  ("ماهي البرمجة" @ 0.97 confidence).
+- **Local vision needs its own timeout + tiny batches.** Ollama CPU model
+  loads take minutes (8 GB RAM machine): separate
+  `vision_local_timeout_seconds` (900s) and `vision_batch_size` (2-4 for
+  small local models; 24-image prompts overflow their context).
+- **Scene descriptions must never sink a watch.** A crash inside the
+  opportunistic describe step aborted the pipeline after all the heavy work;
+  it now catches everything, logs, and degrades to no-descriptions.
+- **On 8 GB RAM, vision and whisper must run sequentially.** Loading
+  qwen2.5vl:3b (~3.4 GB) while faster-whisper holds memory fails outright.
+  The golden-path script runs stages strictly in order for this reason.
+
+## 2026-07-05 — pre-launch dependency & tool audit
+
+Full stack review before the v0.5.0 launch. Everything on current stable
+unless noted; ranges in pyproject are now `>=tested,<next-major`.
+
+- **rapidocr 1.4 (as `rapidocr-onnxruntime`) → 3.9 (renamed `rapidocr`).**
+  MAJOR migration: results moved from `[box, text, score]` rows to an output
+  object (`boxes/txts/scores`), and 3.x ships per-script recognition models
+  with auto-download — which replaced our hand-managed Hugging Face Arabic
+  model entirely. Model routing was picked by a rendered-ground-truth
+  benchmark on this machine (9 scripts, char-hit rate):
+  - default PP-OCRv6 `multi` model: en/zh/ja/fr/es all 100% — Latin accents
+    included, so no routing needed for those.
+  - Arabic: PP-OCRv4 rec + multilingual det = 100% (the v5 rec returns
+    visually-reversed text; v4 wins). Needs `python-bidi` (added to the ocr
+    extra).
+  - Korean: PP-OCRv5 rec + multilingual det = 100% (default det missed half
+    the line). Russian/East-Slavic: PP-OCRv5 `eslav` = 100%.
+  - Devanagari: PP-OCRv5 rec = 71% on the bench render — best available;
+    revisit when RapidOCR ships a v6 Devanagari model.
+  Models now download into `<data_dir>/models/ocr/` (default would be inside
+  site-packages, which a reinstall wipes).
+- **pyannote.audio 3.1 → 4.0 (diarize extra).** Adapted to the breaking
+  rename `use_auth_token=` → `token=` and moved to the recommended
+  `speaker-diarization-community-1` pipeline. Covered by a fake-module
+  regression test (no torch in CI).
+- **numpy held at `>=2.4,<3` instead of forcing 2.5.** numpy 2.5 dropped
+  Python 3.11; we keep 3.11 support (installer bootstraps 3.11+), so 3.11
+  users resolve 2.4.x and 3.12+ users get 2.5.x. 2.4 is exactly one minor
+  behind — inside our freshness budget. Revisit when we drop 3.11.
+- **uvicorn 0.49 → 0.50, ffmpeg 8.1 → 8.1.2 (winget), Playwright browsers
+  refreshed.** yt-dlp self-updated to 2026.07.04 (doctor), deno 2.9.1 —
+  both already latest.
+- **ruff pinned in the dev group (`>=0.15,<0.16`)** so local lint matches CI
+  instead of floating with `uvx`.
+
+### Best-tool audit (evaluated 2026-07-05, per capability)
+
+| Capability | Tool | Verdict | Evidence |
+|---|---|---|---|
+| Download/extraction | yt-dlp | **kept** | Release cadence healthy (2026.07.04, released the day before this audit); doctor's self-update healed a 26-day-old binary during the audit run. No credible successor. |
+| Acquire fallback | cobalt | **demoted to opt-in** | Live check 2026-07-05: anonymous POST to api.cobalt.tools returns `error.api.auth.jwt.missing` — the public API now requires auth. The chain skips cobalt unless `WATCHSKILL_COBALT_API_URL` points at a self-hosted instance (regression-tested), saving a doomed network round-trip before the ffmpeg fallback. |
+| Local STT | faster-whisper | **kept** (1.2.1, current) | This machine has no NVIDIA GPU (doctor), so CT2 int8 CPU is the sweet spot. distil-whisper large-v3 is English-only — incompatible with the multilingual launch story. Parakeet/canary want NeMo/GPU. whisper.cpp would add binary management for no measured CPU win over CT2. |
+| Scene detection | PySceneDetect | **kept** (0.7, current) | ffmpeg `scdet` alone lacks adaptive content detection and midpoint sampling (we'd rebuild both); TransNetV2 drags torch (~2 GB) into a stack that deliberately has none. |
+| OCR | RapidOCR | **kept + major upgrade** (1.4 → 3.9) | 9-script rendered benchmark above. PaddleOCR 3.x needs paddlepaddle (heavy, historically fragile wheels on Windows) to run the same PP-OCR models rapidocr serves via onnxruntime; EasyOCR needs torch. |
+| Vector search | manual cosine → **numpy batch** | **replaced (in-place)** | Measured on this machine: pure-Python cosine over 10k×384 vectors = 5.46 s; one numpy matrix product = 122 ms (45×). numpy already ships with the index extra; pure-Python loop kept as fallback. sqlite-vec (0.1.9, win wheel exists) deferred to the roadmap — pre-1.0, adds a loadable-extension moving part, and 122 ms at 10k vectors doesn't justify it yet. |
+| Embeddings | all-MiniLM-L6-v2 → **paraphrase-multilingual-MiniLM-L12-v2** | **replaced** | A/B on 8-language retrieval cases + cross-lingual: the old default failed Arabic→Arabic retrieval outright (relevant segment ranked below distractors); the multilingual model scores ar→ar 0.55 and **en→ar 0.58** vs ~0.0 for distractors. Same 384 dims (drop-in for the store), faster on this machine (22 vs 7 texts/s), +130 MB download. bge-m3/e5-large rejected: 1024+ dims and >2 GB — wrong size for the 8 GB-RAM target machine. Index meta now pins the embedding model per index (migration v3) so queries always embed with the model that wrote the vectors. |
+| MCP server | FastMCP | **kept** (3.4.2, current) | Actively maintained, current major, and built on the official `mcp` SDK (1.28.1) — we get protocol currency from the SDK plus the ergonomics (progress notifications, streamable HTTP) we already use. Dropping to the raw SDK is boilerplate with no capability gain. |
+| Frame dedup | phash (imagehash) | **kept** (4.3.2, current) | pdqhash now has Windows wheels (0.2.8), but our dedup is coarse scene-frame near-duplicate filtering, test-gated and working; no labeled dataset exists to demonstrate a pdq win, so a swap fails the "measurable axis" bar. videohash is unmaintained (last release 2022). |
+
+## v0.6 — confidence calibration (measured, three live iterations)
+
+The confidence score was calibrated against real retrieval distributions,
+and re-calibrated twice after live golden-path runs exposed failure modes:
+
+1. **Margin beats absolute score.** A fluent question about ABSENT content
+   still tops ~0.59 hybrid (stop-word bm25 + generic cosine); a present one
+   tops ~0.94. But the margin over the runner-up collapses to ~0.02 for
+   absent vs ~0.29 for present — margin carries the most weight.
+2. **Same-kind hits are rivals; cross-kind same-moment hits corroborate.**
+   First live failure: 'long trunks' (the answer) lost its margin to its own
+   adjacent corroborating segment → false floor. Counting only temporally
+   distant hits as rivals then let an absent question fake a clear win on a
+   19 s clip (all hits nearby). Final rule: segment-vs-segment always
+   competes; OCR/scene at the same moment corroborates.
+3. **Lexical anchoring separates present from absent.** Embeddings alone
+   scored 'elephants trunks' (present, terms in evidence) nearly equal to
+   'giraffe on a bicycle' (absent, zero term overlap). The anchor signal —
+   fraction of the question's content terms in the top evidence, through
+   the same Arabic/CJK normalization as search — is worth 30% of the blend,
+   and a question with ZERO grounding is capped below the floor: no
+   grounding, no confidence, unless a model verify pass confirms.
+4. **Weak evidence must not corroborate.** Indexed noise (a burned-in
+   timestamp OCR'd at the right moment) inflated agreement; corroboration
+   now requires ≥40% of the top hit's score.
+
+A stale-index side-effect surfaced during calibration: the Arabic demo
+video indexed before the original-language-captions fix carries an English
+auto-translated transcript, and correctly scores LOW confidence on Arabic
+questions — the honest response until a re-watch refreshes it.
+
+### Launch benchmark (2026-07-05, dev machine: Windows 10, 8 GB RAM, no GPU)
+
+- **Cold CLI start** (`watch-skill version`): 1.2–1.3 s.
+- **Full watch, 10 s local sample** (defaults: scenes + frames + OCR + local
+  whisper): 32.9 s warm. First-ever run additionally downloads the whisper
+  model and OCR models (one-time).
+- **`ask` (CLI one-shot)**: 5.8 s end-to-end — ~1.3 s CLI start + ~3.2 s
+  loading the multilingual embedding model + retrieval itself. The MCP/REST
+  servers keep the model resident, so agent follow-ups don't pay the load.
+- Full offline suite on the upgraded stack: 202 passed (see CI for the
+  cross-platform matrix).
+
+### Not adopting the MCP 2026-07-28 release candidate yet (2026-08-08)
+
+The 2026-07-28 revision is the largest since MCP launched, and it is a
+release *candidate*. It removes the `initialize`/`initialized` handshake and
+`Mcp-Session-Id` entirely, moves client info into `_meta` on every request,
+adds `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers, requires
+`server/discover`, and reshapes Tasks into an extension.
+
+We are staying on the current revision for now, for two reasons. The server
+is built on `fastmcp`, so the protocol version is that library's decision
+before it is ours — adopting ahead of it would mean forking the transport.
+And a candidate is not a specification: shipping against one and then
+tracking its changes costs more than waiting, on a surface where every
+change breaks configured agents.
+
+What that costs us is bounded, because the deprecations do not touch this
+server:
+
+- **Roots** — not used. Watch Skill takes paths and URLs as tool
+  parameters, which is what the deprecation notice recommends instead.
+- **Sampling** — not used. Vision calls go straight to a provider through
+  `VisionClient`; the client's model is never borrowed. (The word "sampling"
+  in `surfaces/mcp/server.py` is about frame budgets.)
+- **Logging** — not used. Progress goes to stderr, which is what the notice
+  points at for stdio servers, and structured errors travel in the tool
+  result.
+
+So the migration when it lands is transport-level: headers, discovery, and
+dropping handshake assumptions. Two things in this repository assume the
+handshake and will need updating with it — the MCP smoke test in
+`.github/workflows/install.yml`, which asserts an `initialize` response, and
+the per-agent smoke tests in `docs/agents/`.
+
+Revisit when fastmcp ships support and the revision is final rather than a
+candidate.
+
+### sqlite-vec stays out for now, and here is the measurement (2026-08-08)
+
+The roadmap carried "the numpy batch cosine handles 10k vectors in ~120 ms;
+past ~100k a real ANN index pays off". Measured on the reference machine
+(Windows 10, 8 GB RAM, CPU-only, 384-dim vectors, best of three scans):
+
+| rows | full scan | index file |
+|---|---|---|
+| 1,000 | 3.2 ms | — |
+| 10,000 | 18.9 ms | 20 MB |
+| 50,000 | 108 ms | 99 MB |
+| 100,000 | 218 ms | 197 MB |
+| 250,000 | 549 ms | 493 MB |
+
+The 10k figure was pessimistic by roughly 6x. Scaling is linear at about
+2.2 µs per stored vector, so the point where a scan stops feeling instant
+sits near 100k — not below it.
+
+Two things follow. sqlite-vec is still 0.1.9 with no stated development
+status, and the roadmap's own condition was "adopt once it stabilizes";
+putting a pre-1.0 binary dependency in the read path of the index, which is
+the product, buys latency we do not yet need. And the more pressing number
+in that table is not the milliseconds but the megabytes: ~2 KB per vector
+means a 100k-item library is a 200 MB file. Vector storage width is the
+scaling problem to solve first, ahead of scan speed.
+
+Re-measure at 100k real items before revisiting. If the scan is the
+complaint rather than the disk, sqlite-vec is the answer — it keeps
+everything in the one SQLite file, which is why it was chosen over an
+external ANN service.
+
+### float16 vectors: halves the index, costs more than it saves (2026-08-09)
+
+The previous entry named vector storage as the scaling problem ahead of scan
+speed — ~2 KB per vector, so a 100k-item library is a 200 MB index. float16
+is the obvious answer and it works on the accuracy side: on this model's own
+output the top-20 is unchanged and the largest cosine error is 2.3e-5. int8
+quarters the size but drops 5% of the top-20, so it was never a candidate.
+
+The read side is where it fails. Every scan has to widen float16 back before
+the matmul, and that dominates:
+
+| decode path | 100k scan |
+|---|---|
+| float32, no conversion | 115 ms |
+| float16, one `astype` | 320 ms |
+| float16, cache-sized blocks | 309 ms |
+| float16, native numpy matmul | 324 ms |
+
+Chunking does not help and letting numpy do the float16 matmul itself is no
+better — the conversion is the cost, not the allocation. End to end through
+the index the change measured 218 ms → 412 ms per 100k query while taking
+the file from 197 MB to 80 MB.
+
+Two hundred milliseconds on every query to save 118 MB of disk is the wrong
+way round on a search path, so storage stays float32.
+
+What was kept: `unpack_vector` and the batch reader both accept either width,
+uniform or mixed within one index. That costs nothing — a uniform batch is
+still a single `frombuffer` — and it means an index written while this was
+being tried still reads correctly. The hazard it guards is silence rather
+than failure: a float16 blob read as float32 returns plausible numbers, so a
+wrong guess would score wrong instead of erroring.
+
+Revisit only with a decode that is free, which in practice means a format
+numpy can matmul without widening.
+
+## Content identity follows the bytes, not the string
+
+`video_id = sha256(source_string)` was wrong in a way that only shows up
+later: overwrite `demo.mp4` and every artifact derived from the *old* file —
+frames, OCR, cached answers — comes back for the new one, correctly formatted
+and completely wrong. Reproduced against `cb3c430`; the same watch twice
+across an overwrite returned one id.
+
+Identity is now four things kept apart:
+
+- **alias** — the path or URL typed. Mutable by nature.
+- **asset** — what that alias has pointed at over time.
+- **revision** — one immutable version, keyed by content digest.
+- **fingerprint** — size, mtime, inode / ETag, Last-Modified. Cheap, and its
+  only job is to decide whether the digest has to be recomputed.
+
+Two things this buys that a "just re-hash it" design does not. A 4 GB file
+whose stat is unchanged is never read; a download is hashed once, during the
+write, and the digest travels in the cache manifest. And identical bytes
+reached through two aliases are one video rather than two.
+
+**Why `videos` was rebuilt rather than extended.** `source` was `UNIQUE`,
+which makes "this path has pointed at two different videos" unrepresentable —
+the exact fact the fix has to record. SQLite cannot drop an implicit unique
+index, so migration v9 does the documented rebuild, with
+`legacy_alter_table=ON` so the RENAME does not rewrite the child tables'
+`REFERENCES` clauses, and foreign keys off for the duration so the cascades
+do not delete the rows being preserved. `tests/index/test_migration_v9.py`
+builds a real v8 database and asserts every derived row survives, that the
+cascade still works afterwards, and that `PRAGMA foreign_key_check` is clean.
+
+**Why old ids still resolve.** Every id ever printed came from the v1
+function, and agents have them in notes. A v1 row is *adopted* on re-watch —
+it keeps its id and gains a real digest — and the content-derived id maps
+onto it through `video_aliases`. Migrated rows get a revision marked
+`digest_source: legacy` and a NULL `content_digest`, because inventing
+something digest-shaped for bytes that were never hashed would let a v1 row
+pass as verified content.
+
+**Freshness is four-valued on purpose.** `freshness_unknown` is a real
+answer, not a soft `fresh`. A remote source nobody went to the network for
+genuinely is unknown, and the previous design's only way to say that was to
+answer confidently anyway.
+
+## One policy object, asked at every boundary
+
+`offline_only` lived in the answer ladder, so it governed follow-up questions
+and nothing else. Indexing-time scene descriptions read "an API key exists"
+as "you may upload every frame of this video", which is a consent bug rather
+than a config bug.
+
+Enforcement is centralised in `policy.guard_egress` and the channels are
+split finely — frames, audio, transcript text, source acquisition, cloud
+models, local models, webhooks, telemetry, verification HTTP — because
+permitting one is not permitting another. Someone who allows OCR text to
+reach a model has not agreed to upload the frame it came from.
+
+Money and data egress are separate policies. `COST_POLICY` is about spend;
+`WATCHSKILL_OFFLINE` is about whether anything leaves at all, and it
+overrides a standing opt-in like `CLOUD_STT_ENABLED`. Cheap-and-cloudy and
+expensive-and-local are both legitimate, and one policy could not express
+both.
+
+`auto` scene descriptions resolve to *local*, never cloud. An automatic
+upgrade to cloud would recreate the original bug with an extra step.
+
+`tests/test_policy.py` runs the engine with every supported provider key
+populated and asserts zero outbound calls. A guarantee about network traffic
+is worth what its test is worth.
+
+## Verification: what decides, and what merely observes
+
+A recording is evidence. It is not an oracle, and the previous critic treated
+it as one: no frames scored 92 and passed, an unreachable model passed, an
+uncallable fallback judge passed. Absent evidence produced the same output as
+success.
+
+Verdicts are now `pass` / `fail` / `inconclusive` / `error`, and every one
+carries an assurance level. The layers have separate jobs: perception shows
+what happened, the critic offers an opinion, **required deterministic checks
+decide**, and an attestation binds the result to its inputs.
+
+A contract is frozen and digested before the run it judges. A model may add
+checks — they land advisory whatever the proposal says — but cannot remove,
+relax, or mark required an existing one. An agent that can rewrite the
+definition of success while being measured against it is not being measured.
+
+A contract with no required check yields `inconclusive`, not `pass`. Visual
+evidence alone is not verification, and the type system should not let
+someone accidentally claim it is.
+
+**`remote_attested` is defined and deliberately not implemented.** A verifier
+running as the same OS user as the agent it judges is not independent of that
+agent. `isolated_local` — separate process, allowlisted environment, bounded
+roots, strict timeouts — is the honest ceiling here, and a contract that asks
+for more fails loudly rather than quietly settling.
+
+**Attestations are hash-bound and say so.** `signature_status` reads
+`unsigned_hash_bound`. Hashing proves the bundle has not been edited; it
+proves nothing about who produced it. Ed25519 signing exists behind the
+`attest` extra because `cryptography` is not a declared dependency, and
+shipping a hash under the word "signed" would be the most misleading thing in
+the system.
+
+### `journal_mode` is the one pragma `busy_timeout` does not cover (2026-08-19)
+
+Every database module ran `PRAGMA journal_mode = WAL` on connect. On an
+established database the mode is already `wal` and the statement is free, so
+normal use never saw a problem. On a fresh database the mode genuinely changes,
+and that path takes a brief exclusive lock which returns `SQLITE_BUSY` without
+consulting the busy handler.
+
+Measured with another connection holding a write transaction and a 30 s busy
+timeout set on the connection under test:
+
+| Statement | Result |
+|---|---|
+| `PRAGMA journal_mode = WAL` | `database is locked` after 0.000 s |
+| `BEGIN IMMEDIATE` | `database is locked` after 33.115 s |
+
+The second is the busy handler working. The first is SQLite declining to invoke
+it. Raising the timeout was therefore never a candidate fix.
+
+`sqlite_util.enable_wal()` reads the mode first and attempts the switch only
+when one is needed, so the common path takes no exclusive lock. Losing the race
+is treated as another connection having done the work, which is correct because
+journal mode is a property of the file and persists once set.
+
+### Browser admission is decided once, at acquisition (2026-08-20)
+
+The browser pool refuses a session when free memory cannot cover the session
+cost plus the reserve that must remain for the rest of the host. Tests that
+drive a governed browser check the same arithmetic up front so an unaffordable
+scenario skips with numbers instead of failing mid-run.
+
+Those two checks read machine-wide free memory at different instants, and that
+quantity is not stable. Sampled at 4 Hz through a run of the live and observer
+suites (1673 samples over 420 s) on the reference host:
+
+| | |
+|---|---|
+| median free | 2073 MB |
+| range | 1058 – 2324 MB |
+| worst downward excursion within 1 s | 336 MB |
+| worst downward excursion within 5 s | 640 MB |
+
+A safety margin on the precondition cannot close that gap: covering a
+five-second excursion would require 640 MB on top of the pool's own 1150 MB
+requirement, which on an 8 GiB host means the scenario never runs. The
+scenario's own cost is not the variable — the pool takes its lease before
+spending memory, and free memory measured either side of session start does not
+move.
+
+So admission is decided once, where it is actually decided. A refusal that
+reaches a test is recorded as a resource skip carrying the pool's own figures,
+and only when the refusal is within 2× the configured requirement. A browser
+that demanded materially more than the pool is configured for would be a
+regression, and still fails.
+
+### Capture capabilities are probed once, not per request (2026-08-21)
+
+`capability_matrix()` answers for eight capture kinds, and two of those answers
+are expensive: enumerating ffmpeg input devices spawns a process, and deciding
+whether browser capture is available launches a Playwright driver to resolve
+the chromium executable. Every workspace snapshot carried the matrix, so the
+UI paid for both on every poll.
+
+Measured on the reference host, uncached:
+
+| | |
+|---|---|
+| first `capability_matrix()` | 20.9 s |
+| subsequent calls | 2.2 s |
+
+Neither answer can change without installing software, so the environment
+probes are cached for the life of the process and run single-flight: a second
+caller waits for the probe already running rather than starting another.
+
+Only the probes are cached. The predicates around them, `_have` and
+`_source_network_allowed`, stay live, because a policy change or a newly
+installed binary must be visible immediately. `reset_capability_probes()`
+exists for the case where that is not enough.
+
+### A server that is listening is not yet a server that is serving (2026-08-21)
+
+`DevHost.start()` used to return once the serving thread had been created. The
+listening socket is created earlier, in the server constructor, so the kernel
+accepts connections into the backlog from that moment. A client connecting in
+the window before `serve_forever` was scheduled saw an open socket and no
+bytes, which is indistinguishable from a hung handler. The symptom is a read
+timeout on the first request and nothing wrong afterwards, and it follows load
+rather than platform, so it reads as flakiness rather than as a bug.
+
+`start()` now builds one complete snapshot through the request handler's own
+path, then issues a request against itself and returns only when the host
+answers. Warming the whole response matters rather than only the capture
+probes, because the snapshot path is cold in more places than those: lazy
+imports, the session and approval stores, and policy all resolve once per
+process. Warming the response makes the guarantee independent of which of them
+happens to be slowest. If the host never answers, `start()` raises with the
+bound address instead of leaving a caller to time out.
+
+### The engine ships on PyPI; there is no npm package
+
+`npx skills add authrain-cloud-abdullahformuli/watch-skill -g` appears in the install instructions and
+reads as though Watch Skill were an npm package. It is not. That command runs
+Vercel's `skills` CLI, which reads the `SKILL.md` files out of this repository
+and installs them into whichever agents are present. The engine is Python and
+arrives from PyPI. The Next.js app under `app/` is `private: true` — a build
+surface for the embedded MCP App, not a publishable artifact.
+
+An npm wrapper was considered and rejected. Shelling out to `uvx` from Node
+would add a second install path, a second version to keep in step and a second
+supply-chain surface, and it would not remove the Python requirement, because
+the engine is Python: Node users would still need `uv` or `pip` on the machine.
+
+The bar for revisiting is a package that does something the Python
+distribution cannot — a typed Node client with tests, no install-time side
+effects, correct exit-code and signal passthrough on all three platforms, a
+version synchronized with the Python release, and trusted publishing with
+provenance. A wrapper that only re-exports `uvx` does not meet it.
+
+### The MCP Registry entry cannot precede the package it points at
+
+`server.json` declares `io.github.authrain-cloud-abdullahformuli/watch-skill` against the PyPI package,
+and `tests/test_mcp_registry.py` validates it on every push against a committed
+copy of the official schema. The schema is committed rather than fetched: a
+test that downloads its own schema fails when someone else's CDN has a bad
+morning, and a schema change should be something a person reviews.
+
+PyPI proves ownership through a marker in the package description, so the
+README carries `<!-- mcp-name: io.github.authrain-cloud-abdullahformuli/watch-skill -->` and the build
+is checked to confirm it survives the `hatch-fancy-pypi-readme` rewrite into
+wheel metadata.
+
+A registry entry resolves to a package at a version, so publishing one before
+that version exists on PyPI advertises an install that cannot work. The release
+workflow publishes the entry from a job that `needs: pypi`, which makes the
+ordering structural rather than something a release checklist has to remember.
+
+Pre-releases are published too. The install command is pinned to the version
+the entry declares — `--from watch-skill[standard]==<version>` — because an
+unpinned `uvx` resolves the newest *stable* release, and an entry that
+advertises a candidate while starting a different build is worse than no entry
+at all. The registry sorts versions itself and does not mark a pre-release as
+latest once the matching stable release exists.
+
+The tests pin what would otherwise reach users as a broken install: the version
+matching `pyproject.toml`, the command in `packageArguments` being a real CLI
+command, and the extra in `runtimeArguments` being one `pyproject.toml`
+declares.
+
+### A token budget cannot bound a step that costs no tokens (2026-08-24)
+
+`ask_video` was documented as having "a hard ceiling on top":
+`answer_token_budget`, capping the whole escalation ladder per question. It
+does not, and could not. Both model-free rungs return their cost as literally
+`0` — that is what "compute before tokens" means — so no token ceiling has
+anything to subtract. The ladder was unbounded by construction, and the
+document said otherwise.
+
+It surfaced as an acceptance failure against a 7-minute caption-rich video with
+no vision backend reachable: two `ask_video` calls over MCP timed out, and the
+CLI retry took **113s** to return an honest abstention nobody was still waiting
+for. From the host, that is indistinguishable from a dead server.
+
+Measured on the reference host, one ask, no VLM:
+
+| phase | before | after |
+|---|---|---|
+| retrieval (hybrid search) | 0.9 s | 0.9 s |
+| `dense_resample` | 53.6 s | ≤ 19 s, or skipped |
+| `zoom_crops_reocr` | 48.3 s | skipped when unaffordable |
+| verify probe (`vision.server_down`) | 2.4 s | 2.4 s |
+| **total** | **113.0 s** | **20–27 s** |
+
+What the escalation bought, on the same two questions:
+
+| | retrieval only | after 104 s of escalation |
+|---|---|---|
+| "main idea of this video" | 0.330 | 0.330 |
+| "what is a second brain made of" | 0.486 | 0.486 |
+
+Zero. On a video whose evidence is captions, re-sampling frames and re-OCRing
+crops recovers nothing, because there was no OCR gap to recover — and one run
+*lowered* confidence by adding same-kind rivals that shrank the top hit's
+margin.
+
+So: a second ceiling, in the unit that was actually being spent.
+`answer_deadline_seconds` (default 25) bounds the ask in wall-clock, and the
+rungs check it between units of work rather than only on entry — a window that
+legitimately cleared the check on entry then ran 24 s past it, so the frame
+count is sized to the time left, not just gated by it.
+
+The cost model is measured, not assumed. The OCR engine is a per-process
+singleton (`perceive/ocr.py::_engines`), so the first window in a fresh server
+pays a ~40 s model load that later windows do not — 45.9 s for 5 frames cold
+against ~2.2 s/frame warm. Predicting one number for both is how the overrun
+happened; the estimate now carries a warmup term and refines per-frame cost
+from observed windows. A fresh server's first ask therefore answers from the
+index alone, which is the right trade: that ask is the one a human is waiting
+on.
+
+Two things deliberately did **not** change. The confidence floor is untouched,
+so a shortened ladder abstains exactly where the full one did — the deadline
+removes work, never lowers the bar. And `vision.server_down` is still printed
+and still leaves `verified=False`; it was never the cause of the timeout (2.4 s
+of 113 s) and suppressing it would have hidden a true statement about what did
+not happen.
+
+The related latent hang: `vision_local_timeout_seconds` defaults to 900 s,
+correct for a batch indexing run against a cold CPU model and a fifteen-minute
+stall for an interactive follow-up. A verify call now inherits whatever
+wall-clock the ask has left instead of the provider default.
+
+### Eleven readings of one caption are one observation (2026-08-25)
+
+Found in a Claude Desktop acceptance test, not in a unit test — which is the
+point: every part in isolation was behaving correctly.
+
+Asked what a "second brain" keeps that ordinary AI memory loses, `hybrid_search`
+returned a top-8 of one transcript segment and **seven identical OCR reads** of
+the static on-screen phrase `the second brain`, at 01:00, 01:01, 01:02 and
+01:03. Every one scored an identical `0.7985`. Widened to top-24, eleven of
+them held ranks 2-12. The transcript line that answered the question —
+
+> "the details and so on. However, second brain keeps every decision and the"
+
+was at **rank 15**, which no top-8 can reach. The user could only get the answer
+by rephrasing the question until different text happened to retrieve, and
+"phrase it differently until it works" is not a retrieval contract.
+
+Nothing was scoring wrongly. A caption that sits on screen gets OCR'd on every
+frame it survives, each read becomes its own indexed block with its own
+`ref_id`, and each is therefore a separate row competing for a separate slot.
+Relevance ranking has no notion that they are the same observation, so
+persistence converts directly into votes.
+
+The fix is a collapse pass between ranking and the top-K cut, over the whole
+candidate pool — running it *after* the cut would dedup a top-K that redundancy
+had already filled, which is the same bug wearing a smaller hat.
+
+Four constraints shaped it:
+
+- **Text alone is not enough.** The same caption recurring five minutes later is
+  a genuine second occurrence. Clustering therefore chains through time: a run
+  continues only while consecutive readings stay within a gap tolerance
+  (default 10s). Gap, not total span — a caption held for two minutes is still
+  one occurrence, and a fixed span cap would slice it arbitrarily.
+- **Text is compared after `normalize_for_search`**, the same normalization the
+  query path uses, so Arabic folding and CJK/Thai segmentation apply here too. A
+  byte-level dedup would have silently never fired on any script normalization
+  exists for.
+- **Similarity, not equality** (`SequenceMatcher` ≥ 0.88, behind a length gate).
+  OCR noise turns `decision` into `decislon`; those are the same caption. The
+  length gate is what stops a short read being absorbed by a longer line that
+  merely contains it.
+- **OCR is not penalized as a modality.** A silent screencast may have nothing
+  else, and distinct OCR lines all survive. The representative keeps its own
+  score rather than being boosted for the readings it covers — boosting would
+  let repetition count again through the back door.
+
+Transcript segments are never clustered: two adjacent segments are two
+different statements, which is the same reasoning `_competitor_score` already
+encodes when it treats same-kind neighbours as rivals rather than corroboration.
+
+Measured on the reported video and question:
+
+| | before | after |
+|---|---|---|
+| top-8 composition | 1 segment, 7 OCR | 5 segments, 3 OCR |
+| near-duplicate OCR in top-8 | 7 (11 in top-24) | 0 |
+| rank of the answering transcript line | 15 | 5 |
+| answer confidence | 0.47 | 0.51 |
+| retrieval latency (median) | 49.4 ms | 55.3 ms |
+
+The strongest OCR hit still ranks second overall, above four transcript
+segments. Confidence rose because evidence agreement across modalities went up,
+not because any threshold moved — the lexical-anchor cap and the honest floor
+are untouched.

@@ -1,0 +1,55 @@
+{
+  "name": "@deepwatch/desktop",
+  "version": "0.1.4",
+  "description": "DeepWatch — an Electron shell around the same Workspace packages",
+  "type": "module",
+  "license": "MIT",
+  "author": "Abdullah Formuli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/authrain-cloud-abdullahformuli/watch-skill.git",
+    "directory": "workspace/apps/desktop"
+  },
+  "homepage": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace#readme",
+  "bugs": {
+    "url": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/issues"
+  },
+  "main": "main.mjs",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "private": true,
+  "productName": "DeepWatch",
+  "build": {
+    "appId": "io.deepwatch.desktop",
+    "productName": "DeepWatch",
+    "win": {
+      "icon": "../../packages/watch/brand/assets/watch-orca.ico"
+    },
+    "mac": {
+      "icon": "../../packages/watch/brand/assets/watch-orca-512.png"
+    },
+    "linux": {
+      "icon": "../../packages/watch/brand/assets/watch-orca-512.png"
+    }
+  },
+  "scripts": {
+    "start": "electron main.mjs"
+  },
+  "dependencies": {
+    "@deepwatch/dsh-contracts": "workspace:^",
+    "@deepwatch/dsh-core-bridge": "workspace:^",
+    "@deepwatch/dsh-workspace": "workspace:^"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}

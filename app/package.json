@@ -1,0 +1,32 @@
+{
+  "name": "watch-skill-workspace",
+  "version": "0.2.0",
+  "description": "Watch Skill MCP App — live observation and verification workspace",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && next build && node scripts/inline.mjs",
+    "build:export": "next build",
+    "inline": "node scripts/inline.mjs",
+    "dev": "next dev"
+  },
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "next": "15.5.23",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.1",
+    "axe-core": "^4.11.1",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "sharp": ">=0.35.0",
+    "postcss": ">=8.5.23"
+  },
+  "private": true
+}

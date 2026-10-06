@@ -1,0 +1,39 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.authrain-cloud-abdullahformuli/watch-skill",
+  "description": "Watch video and live sessions, keep timestamped evidence, and verify an agent's own work.",
+  "version": "1.4.3",
+  "websiteUrl": "https://github.com/authrain-cloud-abdullahformuli/watch-skill",
+  "repository": {
+    "url": "https://github.com/authrain-cloud-abdullahformuli/watch-skill",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "watch-skill",
+      "version": "1.4.3",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "watch-skill[standard]==1.4.3",
+          "description": "Pinned to the version this entry declares. Unpinned, uvx resolves the newest stable release, so a pre-release entry would advertise one version and start another."
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve",
+          "valueHint": "serve",
+          "description": "Starts the MCP server on stdio."
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "name": "@deepwatch/dsh-core-bridge",
+  "version": "0.1.4",
+  "description": "Host plugin: the typed Bridge between DeepSeek Harness and Watch Core",
+  "type": "module",
+  "license": "MIT",
+  "author": "Abdullah Formuli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/authrain-cloud-abdullahformuli/watch-skill.git",
+    "directory": "workspace/packages/watch/core-bridge"
+  },
+  "homepage": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace#readme",
+  "bugs": {
+    "url": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/issues"
+  },
+  "keywords": [
+    "deepwatch",
+    "deepseek-harness",
+    "watch-skill",
+    "ai-agent",
+    "agent-workspace",
+    "bridge",
+    "watch-core",
+    "json-rpc",
+    "stdio",
+    "python"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@deepwatch/dsh-contracts": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "catalog:",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "catalog:",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  }
+}

@@ -1,0 +1,34 @@
+# Watch Browser — observe a page, act on it, and prove what happened.
+#
+# Media perception plus the operator loop. This is the bundle for the case the
+# product exists for: the agent clicks something, and Watch establishes whether
+# the world actually changed, rather than reporting that the click succeeded.
+#
+# Memory is absent on purpose. Verification needs no memory, and a bundle that
+# quietly acquired durable memory about a person because it was convenient is
+# the failure ADR-006 exists to prevent.
+
+- insert:
+    - id: watch-core-bridge
+      name: '@deepwatch/dsh-core-bridge'
+      config:
+        transport: auto
+        command: watch-skill
+        args: [bridge]
+        cwd: ''
+        # See cordis.patch.yml: a first cold start outruns 10s.
+        startupTimeoutMs: 45000
+        requestTimeoutMs: 30000
+        autoConnect: true
+
+    - id: watch-tools
+      name: '@deepwatch/dsh-tools'
+      config:
+        queryTimeoutMs: 120000
+        verifyTimeoutMs: 60000
+
+    - id: watch-client-evidence
+      name: '@deepwatch/dsh-client-evidence'
+
+    - id: watch-trajectory
+      name: '@deepwatch/dsh-trajectory'

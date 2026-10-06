@@ -1,0 +1,35 @@
+# Watch Document — reading text off things, with the engine family behind it.
+#
+# OCR and document perception: the lightweight local route by default, the
+# heavier engines available where the hardware and the licence allow. The
+# Technology Centre row is what makes engine state truthful here — presence on
+# disk is not readiness, and this bundle is the one where that distinction is
+# most likely to be tested.
+#
+# No browser operation and no memory. A document reader that could also click
+# things is a larger grant than the name implies.
+
+- insert:
+    - id: watch-core-bridge
+      name: '@deepwatch/dsh-core-bridge'
+      config:
+        transport: auto
+        command: watch-skill
+        args: [bridge]
+        cwd: ''
+        # See cordis.patch.yml: a first cold start outruns 10s.
+        startupTimeoutMs: 45000
+        requestTimeoutMs: 30000
+        autoConnect: true
+
+    - id: watch-tools
+      name: '@deepwatch/dsh-tools'
+      config:
+        queryTimeoutMs: 120000
+        verifyTimeoutMs: 60000
+
+    - id: watch-technology
+      name: '@deepwatch/dsh-technology'
+
+    - id: watch-client-evidence
+      name: '@deepwatch/dsh-client-evidence'

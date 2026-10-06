@@ -1,0 +1,35 @@
+{
+  "name": "watch-skill",
+  "owner": {
+    "name": "authrain-cloud-abdullahformuli",
+    "url": "https://github.com/authrain-cloud-abdullahformuli"
+  },
+  "metadata": {
+    "description": "Give any AI agent the ability to actually watch video.",
+    "version": "1.4.3"
+  },
+  "plugins": [
+    {
+      "name": "watch-skill",
+      "source": ".",
+      "description": "Watch, index, ask, and iterate on video (THE LOOP). Persistent index, self-healing answers, and a local lessons store — Windows/Linux/macOS.",
+      "version": "1.4.3",
+      "author": {
+        "name": "Abdullah Formuli",
+        "url": "https://github.com/authrain-cloud-abdullahformuli"
+      },
+      "homepage": "https://github.com/authrain-cloud-abdullahformuli/watch-skill",
+      "license": "MIT",
+      "keywords": [
+        "video",
+        "vision",
+        "mcp",
+        "skill",
+        "transcription",
+        "ocr",
+        "the-loop",
+        "youtube"
+      ]
+    }
+  ]
+}

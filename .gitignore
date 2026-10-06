@@ -1,0 +1,69 @@
+# Self-managed portable binaries (bootstrapped by `watch-skill doctor`)
+bin/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Node. The workspace keeps its own rules in workspace/.gitignore; this covers
+# an install that lands at the repository root by mistake.
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+
+# Runtime data (never commit user data)
+*.db
+*.sqlite3
+.watch-skill/
+
+# Test / tool caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+# pytest's summary line does not print in this shell, so counts get read from
+# a junit file — scratch output, never part of the tree
+.pytest-junit.xml
+*.junit.xml
+
+# OS noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local assistant / workspace artifacts (never part of the product)
+PROGRESS.md
+CLAUDE.md
+.claude/
+AGENTS.local.md
+*_REPORT.md
+*.session.md
+issues_export.local.json
+
+# Internal notes (never tracked)
+notes.local/
+t.xml
+.agents/
+.preview/
+.playwright-mcp/
+
+# The embedding cache the offline suite fills, named by
+# FASTEMBED_CACHE_PATH in .github/workflows/ci.yml and cached there by
+# actions/cache. Anchored to the root and to this exact directory: it is
+# 241MB of downloaded weights, and a broader rule would be able to hide
+# source or fixtures.
+/ci-model-cache/
+
+# Local pytest transcript, written when diagnosing a slow run.
+.pytest-run.log
+.clean-build.log
+
+# The Watch Core venv the workspace platform CI job builds so the real
+# Node-to-Python integration suite runs instead of skipping. Named apart from
+# `.venv` so provisioning it in CI cannot disturb a developer's own.
+/.venv-core/

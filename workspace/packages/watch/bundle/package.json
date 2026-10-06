@@ -1,0 +1,70 @@
+{
+  "name": "@deepwatch/dsh-bundle",
+  "version": "0.1.4",
+  "description": "DeepWatch's capabilities, installable into an existing DeepSeek Harness profile",
+  "type": "module",
+  "license": "MIT",
+  "author": "Abdullah Formuli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/authrain-cloud-abdullahformuli/watch-skill.git",
+    "directory": "workspace/packages/watch/bundle"
+  },
+  "homepage": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace#readme",
+  "bugs": {
+    "url": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/issues"
+  },
+  "keywords": [
+    "deepwatch",
+    "deepseek-harness",
+    "watch-skill",
+    "ai-agent",
+    "agent-workspace",
+    "plugin",
+    "dsh-plugin",
+    "agent-tools",
+    "video",
+    "ocr",
+    "evidence",
+    "verification"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "variants": {
+        "full": "./cordis.patch.yml",
+        "media": "./variants/media.patch.yml",
+        "browser": "./variants/browser.patch.yml",
+        "memory": "./variants/memory.patch.yml",
+        "document": "./variants/document.patch.yml"
+      }
+    }
+  },
+  "files": [
+    "cordis.patch.yml",
+    "variants/*.yml",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@deepwatch/dsh-client-brand": "workspace:^",
+    "@deepwatch/dsh-client-evidence": "workspace:^",
+    "@deepwatch/dsh-client-memory": "workspace:^",
+    "@deepwatch/dsh-client-remotes": "workspace:^",
+    "@deepwatch/dsh-client-settings": "workspace:^",
+    "@deepwatch/dsh-core-bridge": "workspace:^",
+    "@deepwatch/dsh-library": "workspace:^",
+    "@deepwatch/dsh-live": "workspace:^",
+    "@deepwatch/dsh-memory": "workspace:^",
+    "@deepwatch/dsh-technology": "workspace:^",
+    "@deepwatch/dsh-tools": "workspace:^",
+    "@deepwatch/dsh-trajectory": "workspace:^",
+    "@deepwatch/dsh-workspace": "workspace:^"
+  }
+}

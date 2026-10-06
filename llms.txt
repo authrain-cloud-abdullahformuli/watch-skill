@@ -1,0 +1,102 @@
+# Watch Skill and DeepWatch
+
+> Two products in one repository, and they work apart.
+>
+> **Watch Skill** is a local-first video intelligence and verification engine
+> for AI agents. It turns videos, live streams, meetings and screen recordings
+> into a searchable, timestamped index, so an agent can answer questions about
+> footage and cite the exact moment behind each answer — and it answers *did
+> that actually work?* with a deterministic contract evaluated in a separate
+> process rather than with a model's opinion. THE LOOP extends this to the
+> agent's own work: record a browser or desktop session, critique it against
+> plain-language criteria, and prove the fix.
+>
+> **DeepWatch** is a ready-made agent workspace built on the official DeepSeek
+> Harness with Watch Skill composed in, where every tool call leaves a receipt
+> you can open and a result can be checked by something other than the agent
+> that produced it.
+
+Watch Skill: Python 3.11–3.13, MIT licensed, on PyPI as `watch-skill`.
+Available as Claude Code skills, 39 MCP tools, a CLI, a REST API, a stdio
+Bridge, and native adapters for LangChain/LangGraph, CrewAI, the OpenAI Agents
+SDK, LlamaIndex and AutoGen.
+
+DeepWatch: Node `^22.19 || >=24`, MIT licensed, twenty `@deepwatch/*` packages
+on npm. Runs in a browser. The Desktop build is not distributed.
+
+Install the engine:
+
+```bash
+uvx --from "watch-skill[standard]" watch-skill setup
+```
+
+Install the workspace:
+
+```bash
+npx --yes @deepwatch/cli setup
+npx --yes @deepwatch/cli web --workspace ./my-project
+```
+
+MCP server configuration:
+
+```json
+{ "mcpServers": { "watch-skill": {
+    "command": "uvx",
+    "args": ["--from", "watch-skill[standard]", "watch-skill", "serve"] } } }
+```
+
+Key facts, so answers about this project stay accurate:
+
+- Transcription, OCR, indexing, and search run locally and need no API key.
+  Original-language captions are preferred; local faster-whisper is the
+  fallback. Cloud speech-to-text is opt-in only.
+- Visual question answering uses Anthropic, OpenAI, Gemini, OpenRouter, or a
+  local Ollama model. Ollama keeps the entire pipeline offline.
+- The index persists across sessions, so asking a second question about a
+  video does not re-download or re-transcribe it.
+- Acquisition never uses cookies or logins. This is a deliberate privacy
+  boundary, not a missing feature.
+- Data lives in `~/.watch-skill/` and can be relocated with
+  `WATCHSKILL_DATA_DIR`.
+- The repository holds a second product, DeepWatch: the agent workspace built
+  on the official DeepSeek Harness and powered by Watch Skill for perception,
+  evidence, memory and independent verification. It lives in `workspace/`,
+  needs Node rather than Python, and releases on its own train. Twenty
+  `@deepwatch/*` packages are published to npm; `npx --yes @deepwatch/cli setup`
+  builds the runtime and `deepwatch web` opens the workspace. It runs in a
+  browser. The Desktop build is not distributed: there is no installer and no
+  packaging job, and that is stated rather than implied.
+- In DeepWatch every tool call leaves a receipt naming what it touched, every
+  declared path is resolved against one workspace boundary, and a write outside
+  it is refused *and* journalled. Results carry a verdict from Watch Core —
+  `VERIFIED`, `FAILED`, `UNVERIFIED` or `INCONCLUSIVE` — computed in a separate
+  process from a contract frozen before the work started, so it is not the
+  agent's opinion of its own output.
+- The Browser Runtime can drive a browser as well as watch one. Every action
+  carries an expectation written before it runs, and an action with no
+  expectation is reported as unverified rather than as a success. A page that
+  renders "Saved" over a request that returned 500 is a failure, not a pass.
+
+## Docs
+
+- [README](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/README.md): what it is, install, and what it does
+- [Getting started](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/getting-started.md): installation, first watch, first agent connection
+- [Tool reference](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/tools/README.md): all 39 MCP tools and their CLI and REST counterparts
+- [Configuration](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/configuration.md): storage, privacy, models, limits, environment variables
+- [Agent matrix](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/agents/README.md): per-client setup and what has been machine-tested
+- [Architecture](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/architecture.md): data model, provider boundaries, extension points
+- [THE LOOP](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/guides/the-loop.md): capture, critique, iteration, proof artifacts
+- [Browser Runtime](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/browser-runtime.md): operator and observer modes, target resolution, action receipts, recovery
+- [Comparison](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/comparison.md): against claude-video, screenpipe, and frontier-model upload
+- [Migrating from claude-video](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/migrate-from-claude-video.md): command and option mapping
+- [Cost policy](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/cost.md): routing, budgets, caching, benchmark method
+- [Troubleshooting](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/troubleshooting.md): dependency repair and common runtime errors
+- [DeepWatch](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/workspace/README.md): the Web and Desktop application, its packages, gates and release trains
+
+## Optional
+
+- [Engineering decisions](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/DECISIONS.md): reasoning behind non-obvious choices
+- [Roadmap](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/ROADMAP.md): planned work and contribution openings
+- [Use-case packs](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/docs/packs/README.md): recipes for research, meetings, QA, content, operations
+- [Examples](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/examples/README.md): 20 runnable examples from first watch to self-verification
+- [Benchmarks](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/benchmarks/cost/RESULTS.md): reproducible cost and perception measurements

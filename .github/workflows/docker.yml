@@ -1,0 +1,149 @@
+name: Docker
+
+# Builds ghcr.io/authrain-cloud-abdullahformuli/watch-skill, and publishes it on a release. GitHub
+# Container Registry needs no account setup and no secret — GITHUB_TOKEN is
+# enough.
+#
+# **A push to main builds and smokes the image; it does not publish one.** It
+# used to, and the tags it pushed were `main` and `latest` — `latest` because
+# `is_default_branch` was the condition, which is a reasonable rule for a
+# project with no releases and the wrong one for a project with two release
+# trains. The effect was that merging anything touching `src/**` moved the tag
+# a person gets from `docker pull ghcr.io/authrain-cloud-abdullahformuli/watch-skill` to whatever had
+# just landed, ahead of — and sometimes instead of — the version that was
+# actually released. A merge is not a release, so a merge no longer publishes.
+#
+# The build still runs on every such push, because a Dockerfile that stops
+# working should fail on the commit that broke it rather than on the tag that
+# needed it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "src/**"
+      - ".github/workflows/docker.yml"
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/docker.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          The released version to tag the image with, e.g. 1.4.0. Leave empty
+          to build and push only the branch tag.
+        required: false
+        type: string
+      latest:
+        description: Also move `latest` to this image. Only for a stable release.
+        required: false
+        default: false
+        type: boolean
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write      # OIDC identity the provenance attestation is signed with
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Everything below the smoke is publication, and publication happens on a
+      # release or on a deliberate dispatch. A pull request and a push to main
+      # both build the image and run it; neither logs in, and neither can
+      # therefore write to the registry even by mistake.
+      - name: Log in to ghcr.io
+        if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # The version, when a dispatch names one.
+            #
+            # `release: published` does not reach this workflow when the
+            # release was created by `GITHUB_TOKEN` — GitHub does not raise
+            # workflow events for actions a workflow token took, which is loop
+            # prevention working as designed. `core-v1.4.3` published to PyPI,
+            # completed its Release, and no image was ever pushed for it: the
+            # registry held `main` and a `latest` from some earlier path, and
+            # nothing said so.
+            #
+            # Core's tag is `core-v<version>`, which is not semver, so the
+            # `type=semver` lines above match nothing on that ref either. The
+            # version is therefore passed in rather than derived, and the two
+            # raw tags below are what a dispatch actually publishes.
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=raw,value=latest,enable=${{ (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && inputs.latest) }}
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A pushed image that cannot answer --version is worse than no image.
+      - name: The image must run
+        run: |
+          docker run --rm "${{ env.IMAGE }}:ci" --version
+          docker run --rm "${{ env.IMAGE }}:ci" doctor --no-fix --json > doctor.json || true
+          cat doctor.json
+          docker run --rm "${{ env.IMAGE }}:ci" --help > /dev/null
+
+      # arm64 matters: Apple Silicon is most of the macOS install base, and
+      # running an amd64 image under emulation makes ffmpeg work crawl.
+      - name: Set up QEMU for the arm64 build
+        if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Push
+        if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      # Signs the pushed digest with the workflow's own identity, so anyone
+      # can verify the image came from this repository and no other.
+      - name: Attest the build provenance
+        if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

@@ -1,0 +1,76 @@
+# @deepwatch/dsh-tenancy
+
+Tenants, roles, remote workers, sharing and audit — enforced server-side
+
+Part of **DeepWatch** — the agent workspace built on the official
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+and powered by [Watch Skill](https://github.com/authrain-cloud-abdullahformuli/watch-skill) for perception, evidence, memory and
+independent verification.
+
+> **Host plugin — runs beside the agent in the DSH process.**
+> Composed by the bundle. Relevant to a shared or multi-user deployment.
+
+## Exports
+
+- `@deepwatch/dsh-tenancy`
+
+## Install
+
+```sh
+npm install @deepwatch/dsh-tenancy
+```
+
+Rarely on its own. [`@deepwatch/dsh-bundle`](https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace/packages/watch/bundle#readme)
+composes this package with the rest of DeepWatch and is what a profile
+normally depends on; installing this one directly is for embedding a
+single piece in a composition you control.
+
+## Example
+
+Classify an action for the audit ledger, without writing a secret into it:
+
+```ts
+import { credentialUse, looksLikeSecret } from '@deepwatch/dsh-tenancy'
+
+if (looksLikeSecret(value)) value = '[redacted]'
+const entry = credentialUse({ actor, provider })
+```
+
+## Requirements
+
+- Node `^22.19.0 || >=24.0.0`
+
+## Stability
+
+`0.1.4` — a stable release.
+
+Stable means tested, documented and supported — not 1.0. This is a
+pre-1.0 line, and semantic versioning gives `0.x` no compatibility
+guarantee across minor versions: **a `0.MINOR` bump may change or remove
+surface, and a patch will not.** Depend on it with a tilde range
+(`~0.1.4`) if you want that difference enforced by your lockfile
+rather than by a changelog. The usual major-version promise starts at 1.0.
+
+## Side effects
+
+Importing a module from this package evaluates no side effects, so a
+bundler may drop what a build does not use. Mounting it in a host is a
+separate matter: what it then reads or writes is governed by the
+workspace boundary and the host's permissions, not by this flag.
+
+## Where this fits
+
+Tenants, roles, remote workers, sharing and audit — decided server-side. A browser half may render a permission; it may not grant one.
+
+The twenty packages and how they compose:
+[the package map](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/workspace/docs/packages.md).
+Running DeepWatch, and the gates a change has to pass:
+[the workspace README](https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace#readme).
+
+## Attribution
+
+Built on DeepSeek Harness · Powered by Watch Skill
+
+DeepWatch and Watch Skill are independent projects and are not affiliated
+with or endorsed by DeepSeek. MIT licensed; third-party notices are in
+[THIRD_PARTY_NOTICES.md](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/workspace/THIRD_PARTY_NOTICES.md).

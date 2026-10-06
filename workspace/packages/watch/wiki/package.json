@@ -1,0 +1,50 @@
+{
+  "name": "@deepwatch/dsh-wiki",
+  "version": "0.1.4",
+  "description": "Deterministic workspace wiki projections over the memory ledger",
+  "type": "module",
+  "license": "MIT",
+  "author": "Abdullah Formuli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/authrain-cloud-abdullahformuli/watch-skill.git",
+    "directory": "workspace/packages/watch/wiki"
+  },
+  "homepage": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace#readme",
+  "bugs": {
+    "url": "https://github.com/authrain-cloud-abdullahformuli/watch-skill/issues"
+  },
+  "keywords": [
+    "deepwatch",
+    "deepseek-harness",
+    "watch-skill",
+    "ai-agent",
+    "agent-workspace",
+    "wiki",
+    "knowledge-base",
+    "notes"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@deepwatch/dsh-memory": "workspace:^"
+  }
+}

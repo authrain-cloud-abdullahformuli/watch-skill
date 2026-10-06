@@ -1,0 +1,105 @@
+# Watch Skill documentation
+
+This directory contains setup guides, operating references, design notes, and workflow
+recipes. If this is your first visit, start with [Getting started](getting-started.md) and
+then connect your client through the [agent matrix](agents/README.md).
+
+## Choose by task
+
+| I want to… | Read |
+|---|---|
+| Install and index a first video | [Getting started](getting-started.md) |
+| Connect an AI coding agent | [Agent compatibility](agents/README.md) |
+| Look up a tool or endpoint | [MCP tool reference](tools/README.md) |
+| Configure storage, models, or privacy | [Configuration](configuration.md) |
+| Fix an installation or runtime issue | [Troubleshooting](troubleshooting.md) |
+| Understand cost and routing | [Cost policy](cost.md) |
+| Decide whether an agent run actually succeeded | [Verification](verification.md) |
+| Compare against other options | [Comparison](comparison.md) |
+| Move over from claude-video | [Migration guide](migrate-from-claude-video.md) |
+| Build capture–critique–verify workflows | [THE LOOP](guides/the-loop.md) |
+| Apply Watch Skill to a job | [Use-case packs](packs/README.md) |
+| Extend or review the engine | [Architecture](architecture.md) and [decisions](DECISIONS.md) |
+| Find contribution opportunities | [Roadmap](ROADMAP.md) and [contributing guide](../CONTRIBUTING.md) |
+
+## Guides
+
+- [YouTube analysis](guides/youtube-analysis.md) — captions, visual evidence, focused
+  windows, and follow-up questions.
+- [Arabic in, Arabic out](guides/arabic-in-arabic-out.md) — script-aware OCR and
+  cross-language retrieval.
+- [Live browser](guides/live-browser.md) — pixels and structured page evidence at once,
+  navigation policy, redaction, and what a page is never allowed to say.
+- [The MCP App](guides/mcp-app.md) — the live workspace: what it shows, how to open it,
+  the transport it negotiates, and what it will never render.
+- [The Observer Loop](guides/observer-loop.md) — declare success first, correct under
+  explicit approval, and let a separate process decide whether it worked.
+- [THE LOOP](guides/the-loop.md) — capture, criteria, iteration, and proof artifacts.
+- [Lessons and savings](guides/lessons-and-savings.md) — corrections, evaluation, caching,
+  and token accounting.
+- [How self-improvement works](guides/how-it-improves-itself.md) — the complete local
+  lesson lifecycle without anthropomorphic claims.
+
+## Use-case packs
+
+Packs combine existing tools into repeatable workflows. They do not add a second API.
+
+- [Browser-agent verification](packs/browser-agent-verification.md)
+- [Agent self-verification](packs/agent-self-verification.md)
+- [QA and bug hunting](packs/qa-bug-hunting.md)
+- [Learning and research](packs/learning-research.md)
+- [Meetings and lectures](packs/meetings-lectures.md)
+- [Content creators](packs/content-creators.md)
+- [Monitoring and operations](packs/monitoring-ops.md)
+
+Runnable counterparts live in the [example catalog](../examples/README.md).
+
+## Reference and design
+
+### Architecture
+
+- [Architecture](architecture.md) — boundaries, data flow, and extension points.
+- [Engineering decisions](DECISIONS.md) — the trade-offs behind those boundaries,
+  with the measurements that settled them.
+
+### Browser and verification
+
+- [Browser Runtime](browser-runtime.md) — operator and observer modes, target
+  resolution, action receipts, recovery, and the false-success benchmark.
+- [Verification](verification.md) — contracts, deterministic checks, assurance
+  levels, attestations.
+- [Live watching](live.md) — sources, bounded pipelines, cursors, finalisation.
+- [Capture capabilities](capture-capabilities.md) — what a given machine can
+  actually record, and how each answer was established.
+
+### Interfaces
+
+- [MCP tools](tools/README.md) — all 39 tools and their REST/CLI twins.
+- [Configuration](configuration.md) — the source of truth for `WATCHSKILL_*`
+  settings.
+
+### Evidence
+
+- [Release proof](release-proof.md) — test results, browser benchmark, packaging
+  and security checks, and the limits of each.
+- [Announcement drafts](announcement-drafts.md) — unpublished copy for the
+  current release, kept here so its claims can be checked before anyone posts
+  one, with a list of the things not to say.
+- [VLM performance](vlm-performance.md) — the measured local vision model:
+  revision, latency, memory, and the failure modes a live session exposed.
+- [Benchmarks](../benchmarks/) — methods, fixtures, and committed results.
+- [Branch consolidation](branch-consolidation.md) — what every branch this
+  repository once had contained, and why deleting it lost nothing.
+
+### Development
+
+- [Testing tiers](testing.md) — what the offline suite proves, and what only a
+  real model can.
+- [Roadmap](ROADMAP.md) — what ships today, what is missing, and what is planned.
+
+## Documentation standards
+
+Commands should run from the repository root unless a guide says otherwise. Integration
+statuses must use the definitions in the [agent matrix](agents/README.md). Measured claims
+need a dated benchmark or reproducible example, and configuration blocks must parse under
+`scripts/validate_agent_docs.py`.

@@ -1,0 +1,90 @@
+# @deepwatch/dsh-live
+
+Live mode — cursors, gaps, clocks, reconnect and a bounded buffer
+
+Part of **DeepWatch** — the agent workspace built on the official
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+and powered by [Watch Skill](https://github.com/authrain-cloud-abdullahformuli/watch-skill) for perception, evidence, memory and
+independent verification.
+
+> **Host plugin — runs beside the agent in the DSH process.**
+> Composed by the bundle. Needed for live and browser sessions.
+
+## Exports
+
+- `@deepwatch/dsh-live`
+- `@deepwatch/dsh-live/capture`
+- `@deepwatch/dsh-live/client`
+- `@deepwatch/dsh-live/components`
+- `@deepwatch/dsh-live/live-mode`
+- `@deepwatch/dsh-live/sources-catalogue`
+- `@deepwatch/dsh-live/synthetic-source`
+
+## Peers
+
+Provided by the host rather than installed here:
+
+- `@deepseek-ai/cordis@4.0.2`
+- `react@^18.2.0`
+
+## Install
+
+```sh
+npm install @deepwatch/dsh-live
+```
+
+Rarely on its own. [`@deepwatch/dsh-bundle`](https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace/packages/watch/bundle#readme)
+composes this package with the rest of DeepWatch and is what a profile
+normally depends on; installing this one directly is for embedding a
+single piece in a composition you control.
+
+## Example
+
+Mounted as a profile row. In your profile's `cordis.patch.yml`:
+
+```yaml
+- id: watch-live
+  name: '@deepwatch/dsh-live'
+```
+
+## Requirements
+
+- Node `^22.19.0 || >=24.0.0`
+- The peers above, supplied by the host composition
+
+Core built with the `[loop]` extra, and a browser installed by `playwright install chromium`, for anything that drives a page.
+
+## Stability
+
+`0.1.4` — a stable release.
+
+Stable means tested, documented and supported — not 1.0. This is a
+pre-1.0 line, and semantic versioning gives `0.x` no compatibility
+guarantee across minor versions: **a `0.MINOR` bump may change or remove
+surface, and a patch will not.** Depend on it with a tilde range
+(`~0.1.4`) if you want that difference enforced by your lockfile
+rather than by a changelog. The usual major-version promise starts at 1.0.
+
+## Side effects
+
+Importing a module from this package evaluates no side effects, so a
+bundler may drop what a build does not use. Mounting it in a host is a
+separate matter: what it then reads or writes is governed by the
+workspace boundary and the host's permissions, not by this flag.
+
+## Where this fits
+
+One clock across streams, with cursors, declared gaps, a bounded buffer and a reconnect policy — so "what was on screen when that was said" has an answer rather than a guess.
+
+The twenty packages and how they compose:
+[the package map](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/workspace/docs/packages.md).
+Running DeepWatch, and the gates a change has to pass:
+[the workspace README](https://github.com/authrain-cloud-abdullahformuli/watch-skill/tree/main/workspace#readme).
+
+## Attribution
+
+Built on DeepSeek Harness · Powered by Watch Skill
+
+DeepWatch and Watch Skill are independent projects and are not affiliated
+with or endorsed by DeepSeek. MIT licensed; third-party notices are in
+[THIRD_PARTY_NOTICES.md](https://github.com/authrain-cloud-abdullahformuli/watch-skill/blob/main/workspace/THIRD_PARTY_NOTICES.md).
